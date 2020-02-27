@@ -31,7 +31,6 @@ NODES_MULTI=$(\
     kubectl get pods --namespace $1 -o wide \
     | tail -n +2 \
     | awk -F" " '{ print $7 }')
-NODES_MULTI=$(echo $NODES_MULTI | sed 's/ //g')
 
 ALL_PODS=$(\
     kubectl get pods --namespace $1 \
@@ -40,7 +39,12 @@ ALL_PODS=$(\
 
 TMPDIR=$(mktemp -d /tmp/kubectl-coverage.XXXXX)
 
-parallel --tmpdir ${TMPDIR} --files calc_percentage "${NODES_MULTI}" "${ALL_PODS}" ::: "$1" ::: "${NODES[@]}" 2>&1 1> /dev/null
+parallel --tmpdir ${TMPDIR} --files \
+    calc_percentage \
+        "$(echo $NODES_MULTI | sed 's/ //g')" \
+        "${ALL_PODS}" \
+    ::: "$1" ::: "${NODES[@]}" \
+    2>&1 1> /dev/null
 
 column -t ${TMPDIR}/*.par
 rm -rf ${TMPDIR}
