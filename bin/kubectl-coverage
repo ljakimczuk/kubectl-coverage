@@ -1,0 +1,46 @@
+#!/bin/bash
+
+calc() { awk "BEGIN{print $*}"; }
+
+calc_percentage() {
+
+    SELECTED_NODES=$(\
+        echo ${1} \
+        | grep -o "$4" \
+        | wc -l) 
+
+    PERCENTAGE=$(calc \
+      ${SELECTED_NODES}/${2}*100)
+
+    LC_NUMERIC="en_US.UTF-8" \
+        printf "%s %3.2f%%\n" $4 ${PERCENTAGE}
+} 
+
+export -f calc_percentage
+export -f calc
+
+declare -a NODES=($(\
+    kubectl get pods --namespace $1 -o wide \
+    | tail -n +2 \
+    | awk -F" " '{ print $7 }' \
+    | xargs -n1 \
+    | sort -u \
+    | xargs))
+
+NODES_MULTI=$(\
+    kubectl get pods --namespace $1 -o wide \
+    | tail -n +2 \
+    | awk -F" " '{ print $7 }')
+NODES_MULTI=$(echo $NODES_MULTI | sed 's/ //g')
+
+ALL_PODS=$(\
+    kubectl get pods --namespace $1 \
+    | tail -n +2 \
+    | wc -l)
+
+TMPDIR=$(mktemp -d /tmp/kubectl-coverage.XXXXX)
+
+parallel --tmpdir ${TMPDIR} --files calc_percentage "${NODES_MULTI}" "${ALL_PODS}" ::: "$1" ::: "${NODES[@]}" 2>&1 1> /dev/null
+
+column -t ${TMPDIR}/*.par
+rm -rf ${TMPDIR}
