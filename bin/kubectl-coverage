@@ -19,32 +19,44 @@ calc_percentage() {
 export -f calc_percentage
 export -f calc
 
-declare -a NODES=($(\
-    kubectl get pods --namespace $1 -o wide \
-    | tail -n +2 \
-    | awk -F" " '{ print $7 }' \
-    | xargs -n1 \
-    | sort -u \
-    | xargs))
+main() {
+    FIELD=$1
+    FIELD=${FIELD:+7}
+    FIELD=${FIELD:=8}
 
-NODES_MULTI=$(\
-    kubectl get pods --namespace $1 -o wide \
-    | tail -n +2 \
-    | awk -F" " '{ print $7 }')
+    NAMESPACE=$1
+    NAMESPACE=${NAMESPACE:+--namespace $NAMESPACE}
+    NAMESPACE=${NAMESPACE:=--all-namespaces}
 
-ALL_PODS=$(\
-    kubectl get pods --namespace $1 \
-    | tail -n +2 \
-    | wc -l)
+    declare -a NODES=($(\
+        kubectl get pods ${NAMESPACE} -o wide \
+        | tail -n +2 \
+        | awk -F" " '{ print $('$FIELD') }' \
+        | xargs -n1 \
+        | sort -u \
+        | xargs))
 
-TMPDIR=$(mktemp -d /tmp/kubectl-coverage.XXXXX)
+    NODES_MULTI=$(\
+        kubectl get pods ${NAMESPACE} -o wide \
+        | tail -n +2 \
+        | awk -F" " '{ print $('$FIELD') }')
 
-parallel --tmpdir ${TMPDIR} --files \
-    calc_percentage \
-        "$(echo $NODES_MULTI | sed 's/ //g')" \
-        "${ALL_PODS}" \
-    ::: "$1" ::: "${NODES[@]}" \
-    2>&1 1> /dev/null
+    ALL_PODS=$(\
+        kubectl get pods ${NAMESPACE} \
+        | tail -n +2 \
+        | wc -l)
 
-column -t ${TMPDIR}/*.par
-rm -rf ${TMPDIR}
+    TMPDIR=$(mktemp -d /tmp/kubectl-coverage.XXXXX)
+
+    parallel --tmpdir ${TMPDIR} --files \
+        calc_percentage \
+            "$(echo $NODES_MULTI | sed 's/ //g')" \
+            "${ALL_PODS}" \
+        ::: "${NAMESPACE}" ::: "${NODES[@]}" \
+        2>&1 1> /dev/null
+
+    column -t ${TMPDIR}/*.par
+    rm -rf ${TMPDIR}
+}
+
+main $1
